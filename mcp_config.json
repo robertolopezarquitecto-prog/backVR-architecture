@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "notebooklm": {
-      "command": "npx.cmd",
-      "args": ["@m4ykeldev/notebooklm-mcp", "serve"]
-    }
-  }
-}
