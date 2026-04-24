@@ -13,24 +13,27 @@ class App {
     }
 
     async init() {
-        // Cargar escena inicial (Placeholder)
-        // Usaremos una imagen de prueba por ahora
-        const testImage = 'https://threejs.org/examples/textures/2294472375_b9a84c5c3d_o.jpg';
+        // Cargar escena inicial desde Google Cloud Storage
+        const testImage = 'https://storage.googleapis.com/backvr-architecture-storage/renders/mi_primer_render.png';
         
         try {
+            console.log('Iniciando carga de textura:', testImage);
             await this.viewer.loadTexture(testImage);
-            document.getElementById('loading-screen').style.opacity = '0';
+            console.log('Textura cargada con éxito');
+            
+            // Ocultar pantalla de carga
+            const loader = document.getElementById('loading-screen');
+            loader.style.opacity = '0';
             setTimeout(() => {
-                document.getElementById('loading-screen').style.display = 'none';
+                loader.style.display = 'none';
             }, 500);
 
-            // Iniciar telemetría
+            // Iniciar telemetría y hotspots
             this.telemetry.start();
-
-            // Ejemplo de Hotspot (Portal)
             this.hotspots.addPortal({ x: 1, y: 0, z: -1 }, 'cocina');
             
-            this.animate();
+            // Iniciar ciclo de actualización de hotspots
+            this.update();
         } catch (err) {
             console.error('Error cargando la experiencia:', err);
         }
@@ -47,19 +50,19 @@ class App {
             }
         });
 
-        // Eventos de navegación entre escenas
         window.addEventListener('portal-click', (e) => {
-            const sceneId = e.detail;
-            console.log('Cambiando a escena:', sceneId);
-            this.telemetry.setScene(sceneId);
-            // Aquí cargaríamos la nueva textura del bucket de GCS
+            console.log('Cambiando a escena:', e.detail);
+            this.telemetry.setScene(e.detail);
         });
     }
 
-    animate() {
-        requestAnimationFrame(() => this.animate());
+    update() {
+        requestAnimationFrame(() => this.update());
         this.hotspots.updateHotspotPositions();
     }
 }
 
-new App();
+// Iniciar aplicación cuando el DOM esté listo
+window.addEventListener('DOMContentLoaded', () => {
+    new App();
+});
