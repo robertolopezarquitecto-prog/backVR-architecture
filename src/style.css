@@ -98,8 +98,9 @@ body, html {
   align-items: center;
   justify-content: center;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
   pointer-events: auto;
+  z-index: 5;
 }
 
 .hotspot:hover {
@@ -112,6 +113,27 @@ body, html {
   background: var(--accent-color);
   border-radius: 50%;
   animation: pulse 2s infinite;
+}
+
+.hotspot-label {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.hotspot:hover .hotspot-label {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-5px);
 }
 
 @keyframes pulse {

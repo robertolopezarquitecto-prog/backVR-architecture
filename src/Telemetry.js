@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { db } from './firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export class Telemetry {
     constructor(viewer) {
@@ -30,7 +32,7 @@ export class Telemetry {
             this.viewer.camera.getWorldDirection(lookDirection);
 
             const data = {
-                timestamp: Date.now(),
+                timestamp: serverTimestamp(),
                 sessionId: this.sessionId,
                 sceneId: this.currentSceneId,
                 gaze: {
@@ -40,11 +42,13 @@ export class Telemetry {
                 }
             };
 
-            // Aquí enviaremos a Firestore
-            console.log('GAZE_FOCUS:', data);
-            
-            // Disparar evento para que el main lo envíe a Firestore
-            window.dispatchEvent(new CustomEvent('telemetry-update', { detail: data }));
+            // Enviar a Firestore
+            try {
+                await addDoc(collection(db, 'telemetry'), data);
+                console.log('GAZE_FOCUS guardado en Firestore');
+            } catch (e) {
+                console.warn('Error al guardar telemetría (¿Faltan credenciales?):', e.message);
+            }
 
             await new Promise(resolve => setTimeout(resolve, this.interval));
         }

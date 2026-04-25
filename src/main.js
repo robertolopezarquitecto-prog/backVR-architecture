@@ -1,6 +1,7 @@
 import { Viewer } from './Viewer';
 import { HotspotManager } from './HotspotManager';
 import { Telemetry } from './Telemetry';
+import { SCENES } from './scenes';
 import './style.css';
 
 class App {
@@ -13,32 +14,51 @@ class App {
     }
 
     async init() {
-        // Cargar escena inicial desde Google Cloud Storage
-        const testImage = 'https://storage.googleapis.com/backvr-architecture-storage/renders/mi_primer_render.png';
+        // Cargar escena inicial (Salón)
+        await this.loadScene('salon');
         
+        this.initUI();
+        this.update();
+    }
+
+    async loadScene(sceneId) {
+        const sceneData = SCENES[sceneId];
+        if (!sceneData) return;
+
+        console.log('Cargando escena:', sceneData.name);
+        
+        // Mostrar pantalla de carga
+        const loader = document.getElementById('loading-screen');
+        loader.style.display = 'flex';
+        loader.style.opacity = '1';
+
         try {
-            console.log('Iniciando carga de textura:', testImage);
-            await this.viewer.loadTexture(testImage);
-            console.log('Textura cargada con éxito');
+            // 1. Cargar textura
+            await this.viewer.loadTexture(sceneData.url);
             
+            // 2. Limpiar y añadir nuevos hotspots
+            this.hotspots.clear();
+            sceneData.portals.forEach(p => {
+                this.hotspots.addPortal(p.position, p.id, p.label);
+            });
+
+            // 3. Actualizar telemetría
+            this.telemetry.setScene(sceneId);
+
+            // 4. Iniciar telemetría si no está iniciada
+            this.telemetry.start();
+
             // Ocultar pantalla de carga
-            const loader = document.getElementById('loading-screen');
-            loader.style.opacity = '0';
             setTimeout(() => {
-                loader.style.display = 'none';
+                loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 500);
             }, 500);
 
-            // Iniciar telemetría y hotspots
-            this.telemetry.start();
-            this.hotspots.addPortal({ x: 1, y: 0, z: -1 }, 'cocina');
-            
-            // Iniciar ciclo de actualización de hotspots
-            this.update();
         } catch (err) {
-            console.error('Error cargando la experiencia:', err);
+            console.error('Error cargando la escena:', err);
+            // Si falla (ej. no existe el render de la cocina), mostrar aviso
+            alert(`No se pudo cargar la imagen de ${sceneData.name}. Asegúrate de que el archivo existe en el bucket.`);
         }
-
-        this.initUI();
     }
 
     initUI() {
@@ -50,9 +70,9 @@ class App {
             }
         });
 
+        // Escuchar clics en portales
         window.addEventListener('portal-click', (e) => {
-            console.log('Cambiando a escena:', e.detail);
-            this.telemetry.setScene(e.detail);
+            this.loadScene(e.detail);
         });
     }
 
@@ -62,7 +82,6 @@ class App {
     }
 }
 
-// Iniciar aplicación cuando el DOM esté listo
 window.addEventListener('DOMContentLoaded', () => {
     new App();
 });
