@@ -28,7 +28,7 @@ Skip an ADR for small, local refactors or obvious bug fixes.
 
 ## How agents should use this
 
-When implementing or proposing a decision that matches **When to add an ADR** above, **add a new ADR file** in this directory in the same format as [`TEMPLATE.md`](./TEMPLATE.md), using the next sequence number and a clear kebab-case title. Link related PRs or issues in **Notes** if helpful.
+When implementing a decision that matches **When to add an ADR** above, **add a new ADR file in the same PR as the implementation** (not afterward). Use [`TEMPLATE.md`](./TEMPLATE.md), the next sequence number, a clear kebab-case title, and **update the index table below**. Follow **`.agents/rules/architecture-adrs.md`** for the full checklist. Link related PRs or issues in **Notes** if helpful.
 
 ## Index
 

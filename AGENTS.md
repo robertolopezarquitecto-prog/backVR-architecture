@@ -77,6 +77,14 @@ E2E is **not** wired yet—see **TODO: Playwright** below.
 
 Follow **`.agents/rules/testing-requirements.md`**. New or changed behavior should include appropriate automated tests.
 
+## Architecture decisions (ADRs)
+
+Agents and humans **must** capture significant, cross-cutting, or hard-to-reverse decisions as **ADRs** under **`docs/adr/`**, not only in PR text or chat.
+
+1. Read **`.agents/rules/architecture-adrs.md`** (always-on) and **`docs/adr/README.md`** (“When to add an ADR”).
+2. If the change matches those criteria, add **`docs/adr/NNNN-title.md`** from **`docs/adr/TEMPLATE.md`**, bump the sequence number, and **update the index table** in **`docs/adr/README.md`** in the **same PR** as the implementation.
+3. For multi-file or high-impact work, follow **`.agents/skills/incremental-implementation/SKILL.md`** and treat “ADR written + indexed” as part of the deliverable, same as tests and a green build.
+
 ## TODO: Playwright (E2E)
 
 Playwright is referenced in **`.agents/rules/testing-requirements.md`** and **`.github/workflows/e2e.yml`**, but the app does not yet define `npm run test:e2e` or a Playwright config. Track and complete:
@@ -93,5 +101,4 @@ Playwright is referenced in **`.agents/rules/testing-requirements.md`** and **`.
 2. Read the relevant `.agents/rules/*.md` before large edits.
 3. Use `.agents/skills/incremental-implementation/SKILL.md` for multi-file work; keep the build and tests green between
    steps.
-4. For architecture decisions that match the criteria in `docs/adr/README.md`, add or update an ADR under `docs/adr/`
-   using `docs/adr/TEMPLATE.md`.
+4. For architecture decisions that match **`docs/adr/README.md`**, **add or update an ADR** under **`docs/adr/`** using **`docs/adr/TEMPLATE.md`**, update **`docs/adr/README.md`** index, and do it in the **same change** as the code — see **`.agents/rules/architecture-adrs.md`**.

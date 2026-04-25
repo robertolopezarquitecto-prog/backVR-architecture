@@ -41,6 +41,10 @@ For each slice:
 4. **Commit** -- save your progress with a descriptive message (see `git-workflow-and-versioning` for atomic commit guidance)
 5. **Move to the next slice** — carry forward, don't restart
 
+### ADRs in the same delivery
+
+If a slice (or the overall task) changes **stack, security or data boundaries, or cross-cutting conventions**, treat an **ADR** as part of the slice: follow **`.agents/rules/architecture-adrs.md`**, add **`docs/adr/NNNN-....md`** from **`docs/adr/TEMPLATE.md`**, and update **`docs/adr/README.md`** in the **same PR** as the code. Do not defer ADRs to a “later cleanup” unless the team explicitly defers in writing.
+
 ## Slicing Strategies
 
 ### Vertical Slices (Preferred)
