@@ -1,0 +1,63 @@
+# Single CI orchestrator: PRs (non-draft) and push to main.
+# PR: lint, build. Main: build, test, deploy (no lint).
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**/*.md"
+      - "public/**"
+      - "docs/**"
+      - ".agents/**"
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "public/**"
+      - "docs/**"
+      - ".agents/**"
+
+# Allow tests.yml to post PR comments and coverage (checks + pull-requests write).
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  lint:
+    name: Lint & format
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    uses: ./.github/workflows/lint-and-format.yml
+
+  test:
+    name: Tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    uses: ./.github/workflows/tests.yml
+    with:
+      upload-coverage: ${{ github.event_name == 'push' }}
+      coverage-artifact-name: coverage
+      compare-coverage: false
+
+  build:
+    name: Build
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    needs: [test]
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  e2e:
+    name: E2E
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main')
+    uses: ./.github/workflows/e2e.yml
+    secrets: inherit
+# Optional: deploy to Vercel after main passes build + E2E. Requires repo secrets
+# VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (see deploy.yml header).
+# Prefer workflow_dispatch on "Deploy to Vercel" when you want manual control only.
+#
+#  deploy:
+#    name: Deploy
+#    if: github.event_name == 'push' && (github.ref == 'refs/heads/main')
+#    needs: [build, e2e]
+#    uses: ./.github/workflows/deploy.yml
+#    secrets: inherit

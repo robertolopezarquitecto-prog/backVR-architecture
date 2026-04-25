@@ -1,0 +1,27 @@
+# Reusable: format check and lint. Extend steps here when adding more formatting tools.
+name: Lint and format
+
+on:
+  workflow_call:
+
+jobs:
+  lint-and-format:
+    name: Format & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Format check (Prettier)
+        run: npm run format:check
+
+      - name: Lint (ESLint)
+        run: npm run lint

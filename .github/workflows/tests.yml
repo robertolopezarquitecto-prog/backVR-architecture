@@ -1,0 +1,96 @@
+# Reusable: run tests with optional coverage upload and PR comparison.
+# Weekly schedule on main uploads Vitest coverage-summary.json for baseline comparison when enabled.
+name: Tests
+
+on:
+  schedule:
+    # Monday 06:12 UTC — weekly baseline coverage on default branch
+    - cron: "12 6 * * 1"
+  workflow_call:
+    inputs:
+      upload-coverage:
+        type: boolean
+        description: Upload coverage artifact
+        default: false
+      coverage-artifact-name:
+        type: string
+        description: Name for the coverage artifact
+        default: coverage
+      compare-coverage:
+        type: boolean
+        description: Download base coverage and post PR comment
+        default: false
+      base-workflow:
+        type: string
+        description: Workflow name for base coverage artifact (when compare-coverage)
+        default: ""
+      base-branch:
+        type: string
+        description: Branch (or ref) for base coverage (e.g. main)
+        default: main
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    # workflow_call supplies inputs; schedule has no inputs — branch here for coverage upload baseline.
+    env:
+      UPLOAD_COVERAGE: ${{ github.event_name == 'schedule' || inputs.upload-coverage }}
+      COVERAGE_ARTIFACT_NAME: ${{ inputs.coverage-artifact-name || 'coverage' }}
+      COMPARE_COVERAGE: ${{ inputs.compare-coverage }}
+      BASE_WORKFLOW: ${{ inputs.base-workflow }}
+      BASE_BRANCH: ${{ inputs.base-branch || 'main' }}
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run app (src/) unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Download base coverage (compare)
+        if: env.COMPARE_COVERAGE == 'true' && env.BASE_WORKFLOW != ''
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v20
+        with:
+          workflow: ${{ env.BASE_WORKFLOW }}
+          branch: ${{ env.BASE_BRANCH }}
+          name: ${{ env.COVERAGE_ARTIFACT_NAME }}
+          path: base-coverage
+
+      - name: Vitest coverage report (PR vs baseline)
+        if: github.event_name == 'pull_request' && env.COMPARE_COVERAGE == 'true'
+        continue-on-error: true
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          vite-config-path: vitest.config.ts
+          name: app-vs-baseline
+          json-summary-compare-path: base-coverage/coverage/coverage-summary.json
+
+      - name: Vitest coverage report (PR)
+        if: github.event_name == 'pull_request' && env.COMPARE_COVERAGE != 'true'
+        continue-on-error: true
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          vite-config-path: vitest.config.ts
+          name: app
+
+      - name: Upload coverage artifact
+        id: upload
+        if: env.UPLOAD_COVERAGE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.COVERAGE_ARTIFACT_NAME }}
+          path: coverage/coverage-summary.json
+          retention-days: 7

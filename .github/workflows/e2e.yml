@@ -1,0 +1,61 @@
+# E2E tests (Playwright + mock API). Only runs when called by CI (push to main/dev).
+name: E2E
+
+on:
+  workflow_call: {}
+
+jobs:
+  e2e:
+    strategy:
+      matrix:
+        browser: [chromium] #, firefox, webkit]
+    name: E2E Tests (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: cache-playwright
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}-${{ matrix.browser }}
+          restore-keys: |
+            playwright-${{ matrix.browser }}-
+            playwright-
+
+      - name: Install Playwright Browsers
+        if: steps.cache-playwright.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Verify Playwright browsers
+        run: npx playwright install --dry-run ${{ matrix.browser }}
+
+      - name: Run E2E tests (${{ matrix.browser }})
+        run: npm run test:e2e
+
+      - name: Save Playwright browsers cache
+        if: always() && steps.cache-playwright.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/playwright
+          key: playwright-${{ hashFiles('package-lock.json') }}-${{ matrix.browser }}
