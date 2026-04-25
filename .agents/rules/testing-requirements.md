@@ -9,10 +9,10 @@ Treat sparse coverage as a gap to close, not a reason to skip tests. **New or ma
 
 ## What to add
 
-| Area                          | Prefer                                                                                                                                                                           |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App (`src/`), shared packages | **Vitest** unit/component tests; **Testing Library** for React (user-centric queries, `user-event`, `findBy*` / `waitFor` for async UI—see `.agents/subagents/testing-agent.md`) |
-| Critical user journeys        | **Playwright** (`.agents/subagents/playwright-ui.md`)                                                                                                                            |
+| Area                          | Prefer                                                                                                                                                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App (`src/`), shared packages | **Jest** with **`next/jest`** for unit/component tests; **Testing Library** for React (user-centric queries, `user-event`, `findBy*` / `waitFor` for async UI—see `.agents/subagents/testing-agent.md`). |
+| Critical user journeys        | **Playwright** (`.agents/subagents/playwright-ui.md`)                                                                                                                                                    |
 
 Cover happy path, meaningful errors/edge cases, and async behavior where relevant. Avoid coupling tests to implementation details when a user-facing assertion is enough.
 

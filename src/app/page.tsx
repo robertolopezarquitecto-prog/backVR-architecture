@@ -1,4 +1,4 @@
-import VRViewer from '@/components/VRViewer';
+import VRViewer from "@/components/VRViewer";
 
 export default function Home() {
   return (

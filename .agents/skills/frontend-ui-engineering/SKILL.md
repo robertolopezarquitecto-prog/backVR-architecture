@@ -21,12 +21,14 @@ Build production-quality user interfaces that are accessible, performant, and vi
 
 ### File Structure
 
-Colocate everything related to a screen or reusable component. Route screens live under `src/pages/`; reusable UI lives under `src/components/<feature>/`.
+Colocate everything related to a screen or reusable component. Route screens live under `src/app/` (App Router: `page.tsx`, layouts, route groups); reusable UI lives under `src/components/<feature>/`.
 
 ```
-src/pages/
-  home-screen.tsx
-  home-screen.test.tsx
+src/app/
+  (marketing)/
+    page.tsx
+    page.test.tsx
+  layout.tsx
 
 src/components/
   task-list/
@@ -63,28 +65,36 @@ src/components/
 **Keep components focused:**
 
 ```tsx
-// Good: Does one thing (example: Reshaped + Lucide — align with Reshaped docs for exact props)
+// Good: Does one thing — Radix Checkbox (unstyled) + Tailwind + Lucide (install @radix-ui/react-checkbox when needed)
+import * as Checkbox from "@radix-ui/react-checkbox";
 import { Trash2 } from "lucide-react";
-import { Button, Checkbox, View } from "reshaped";
 
 export function TaskItem({ task, onToggle, onDelete }: TaskItemProps) {
+  const id = `task-${task.id}`;
   return (
-    <View as="li" direction="row" align="center" gap={3} padding={3}>
-      <Checkbox
-        checked={task.done}
-        name={`task-${task.id}`}
-        onChange={() => onToggle(task.id)}
-      >
-        {task.title}
-      </Checkbox>
-      <Button
-        variant="ghost"
-        size="small"
-        icon={Trash2}
+    <li className="flex flex-row items-center gap-3 p-3">
+      <div className="flex items-center gap-2">
+        <Checkbox.Root
+          id={id}
+          checked={task.done}
+          onCheckedChange={() => onToggle(task.id)}
+          className="flex h-5 w-5 items-center justify-center rounded border border-neutral-600 bg-neutral-900 data-[state=checked]:bg-blue-600"
+        >
+          <Checkbox.Indicator className="text-white">✓</Checkbox.Indicator>
+        </Checkbox.Root>
+        <label htmlFor={id} className="text-sm">
+          {task.title}
+        </label>
+      </div>
+      <button
+        type="button"
+        className="inline-flex rounded-md p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+        aria-label="Delete task"
         onClick={() => onDelete(task.id)}
-        attributes={{ "aria-label": "Delete task" }}
-      />
-    </View>
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </li>
   );
 }
 ```
@@ -97,8 +107,7 @@ export function TaskListContainer() {
   const { tasks, isLoading, error } = useTasks();
 
   if (isLoading) return <TaskListSkeleton />;
-  if (error)
-    return <ErrorState message="Failed to load tasks" retry={refetch} />;
+  if (error) return <ErrorState message="Failed to load tasks" retry={refetch} />;
   if (tasks.length === 0) return <EmptyState message="No tasks yet" />;
 
   return <TaskList tasks={tasks} />;
@@ -180,7 +189,7 @@ Don't skip heading levels. Don't use heading styles for non-heading content.
 
 ### Color
 
-- Use the design system’s semantic options (for **Reshaped**: `Text` `color`, `View` `backgroundColor`, `Button` `color`, etc.) rather than raw hex in one-off styles
+- Use **Tailwind** theme tokens from your config or `globals.css` (e.g. `text-neutral-400`, `bg-zinc-950`) instead of scattered raw hex; style **Radix** parts with `className` on each primitive
 - Ensure sufficient contrast (4.5:1 for normal text, 3:1 for large text)
 - Don't rely solely on color to convey information (use icons, text, or patterns too)
 
@@ -247,12 +256,14 @@ function TaskList({ tasks }: { tasks: Task[] }) {
       <div role="status" className="py-12 text-center">
         <TasksEmptyIcon className="text-muted mx-auto h-12 w-12" />
         <h3 className="mt-2 text-sm font-medium">No tasks</h3>
-        <p className="text-muted mt-1 text-sm">
-          Get started by creating a new task.
-        </p>
-        <Button className="mt-4" onClick={onCreateTask}>
+        <p className="text-muted mt-1 text-sm">Get started by creating a new task.</p>
+        <button
+          type="button"
+          className="mt-4 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+          onClick={onCreateTask}
+        >
           Create Task
-        </Button>
+        </button>
       </div>
     );
   }
@@ -263,13 +274,11 @@ function TaskList({ tasks }: { tasks: Task[] }) {
 
 ## Responsive Design
 
-Design for mobile first, then expand. With **Reshaped**, use responsive prop objects (`s` / `m` / `l` / `xl` viewports) on layout primitives instead of ad hoc media queries:
+Design for mobile first, then expand. With **Tailwind**, use responsive prefixes instead of ad hoc one-off media queries:
 
 ```tsx
-// Reshaped: stack on small screens, row on medium and up
-<View direction={{ s: "column", m: "row" }} gap={{ s: 2, m: 4 }} wrap>
-  {/* ... */}
-</View>
+// Stack on small screens, row on medium and up
+<div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:gap-4">{/* ... */}</div>
 ```
 
 Test at these breakpoints: 320px, 768px, 1024px, 1440px.

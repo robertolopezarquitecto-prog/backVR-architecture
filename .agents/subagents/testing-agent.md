@@ -1,6 +1,6 @@
 ---
 name: testing-agent
-description: Expert in all forms of software testing: Vitest unit tests, Testing Library (React/DOM), integration tests and UI end-to-end tests (Playwright). Use proactively for test coverage, quality assurance, and fixing regressions.
+description: Expert in all forms of software testing: Jest (next/jest) unit tests, Testing Library (React/DOM), integration tests and UI end-to-end tests (Playwright). Use proactively for test coverage, quality assurance, and fixing regressions.
 ---
 
 # Testing Agent
@@ -17,7 +17,7 @@ Read `mistakes.md` in the project root (if it exists). Avoid repeating any mista
 
 ### Unit Testing
 
-- Write comprehensive unit tests using **Vitest** for TypeScript/JavaScript in this repo (Vite-native runner; `npm run test`, `vitest.config.ts`). Vitest’s API is Jest-compatible for most patterns (`describe` / `it` / `expect`, `vi.fn`, mocks).
+- Write unit and component tests with **Jest** and **`next/jest`** (`jest.config.js`, `npm run test`) per the [Next.js Jest guide](https://nextjs.org/docs/app/guides/testing/jest). Use `describe` / `it` / `expect`, `jest.fn`, `jest.mock`, etc.
 - Follow AAA pattern (Arrange, Act, Assert)
 - Create mocks, stubs, and fakes
 - Test edge cases, error conditions, happy path
@@ -30,10 +30,10 @@ Read `mistakes.md` in the project root (if it exists). Avoid repeating any mista
 For React (and other supported frameworks), use the **[@testing-library](https://testing-library.com/docs/)** family: query and interact with the UI the way a user would—**not** by reaching into component internals. Official docs: [Introduction](https://testing-library.com/docs/) and [Guiding Principles](https://testing-library.com/docs/guiding-principles).
 
 - **Mindset:** Prefer assertions and queries that survive refactors. If the behavior is unchanged but implementation changes, tests should usually still pass. Avoid coupling tests to internal state, private methods, lifecycle hooks, or shallow mocks of child components when an integration-style render gives better user-facing confidence.
-- **Stack:** Use `render` from `@testing-library/react`, matchers from `@testing-library/jest-dom/vitest` in Vitest setup (not the Jest-only default import), and user interactions via `@testing-library/user-event` (async, closer to real input than `fireEvent` alone).
+- **Stack:** Use `render` from `@testing-library/react`, extend matchers via `@testing-library/jest-dom` in `jest.setup.ts` (`setupFilesAfterEnv`), and user interactions via `@testing-library/user-event` (async, closer to real input than `fireEvent` alone).
 - **Queries:** Prefer [accessible queries and the documented priority order](https://testing-library.com/docs/queries/about/#priority)—for example `getByRole` (often with `name`), `getByLabelText`, `getByPlaceholderText`, then `getByText`. Use `getByTestId` only when you cannot match by role or text in a user-meaningful way.
 - **Async UI:** Use `findBy*` / `waitFor` for elements that appear after async work; avoid arbitrary `sleep` timeouts.
-- **Scope:** Testing Library is not the test runner—pair it with **Vitest** and a DOM environment (`environment: 'jsdom'` in Vitest). For full-browser journeys, use Playwright per **UI Testing (Playwright)** below.
+- **Scope:** Testing Library is not the test runner—pair it with **Jest** and **`jest-environment-jsdom`** (via `next/jest` / `testEnvironment`). For full-browser journeys, use Playwright per **UI Testing (Playwright)** below.
 
 ### Integration Testing
 

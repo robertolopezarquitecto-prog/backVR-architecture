@@ -1,11 +1,11 @@
 # Reusable: run tests with optional coverage upload and PR comparison.
-# Weekly schedule on main uploads Vitest coverage-summary.json for baseline comparison when enabled.
+# Weekly schedule on main uploads Jest coverage-summary.json for baseline comparison when enabled.
 name: Tests
 
 on:
   schedule:
-    # Monday 06:12 UTC — weekly baseline coverage on default branch
-    - cron: "12 6 * * 1"
+    # Monday 02:12 UTC — weekly baseline coverage on default branch
+    - cron: "12 2 * * 1"
   workflow_call:
     inputs:
       upload-coverage:
@@ -68,23 +68,6 @@ jobs:
           branch: ${{ env.BASE_BRANCH }}
           name: ${{ env.COVERAGE_ARTIFACT_NAME }}
           path: base-coverage
-
-      - name: Vitest coverage report (PR vs baseline)
-        if: github.event_name == 'pull_request' && env.COMPARE_COVERAGE == 'true'
-        continue-on-error: true
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          vite-config-path: vitest.config.ts
-          name: app-vs-baseline
-          json-summary-compare-path: base-coverage/coverage/coverage-summary.json
-
-      - name: Vitest coverage report (PR)
-        if: github.event_name == 'pull_request' && env.COMPARE_COVERAGE != 'true'
-        continue-on-error: true
-        uses: davelosert/vitest-coverage-report-action@v2
-        with:
-          vite-config-path: vitest.config.ts
-          name: app
 
       - name: Upload coverage artifact
         id: upload
