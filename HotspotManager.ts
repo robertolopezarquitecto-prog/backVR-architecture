@@ -7,11 +7,12 @@ export class HotspotManager {
     this.onNavigate = onNavigate;
   }
 
-  addHotspot(x: number, y: number, sceneId: string) {
+  addHotspot(x: number, y: number, sceneId: string, label?: string) {
     const div = document.createElement('div');
     div.className = 'hotspot-point';
+    if (label) div.title = label;
     
-    // Estilos críticos que sugirió el nuevo Ant
+    // Estilos críticos
     div.style.position = 'absolute';
     div.style.left = `${x}%`;
     div.style.top = `${y}%`;
@@ -24,7 +25,7 @@ export class HotspotManager {
     div.style.pointerEvents = 'auto'; // ¡ESTO ES LO MÁS IMPORTANTE!
     div.style.zIndex = '1000';
 
-    // El evento de clic que nos llevará a la cocina
+    // El evento de clic para navegación
     div.addEventListener('click', (e) => {
       e.stopPropagation(); // Para que el clic no se pierda
       console.log("¡Click detectado en hotspot!", sceneId);
