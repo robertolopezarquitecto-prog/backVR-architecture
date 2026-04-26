@@ -1,10 +1,4 @@
-import { HotspotManager } from './HotspotManager';
-
-interface Scene {
-  id: string;
-  imageUrl: string;
-  hotspots: { x: number; y: number; targetSceneId: string; label: string }[];
-}
+import { SceneController, Scene } from './SceneController';
 
 const SCENES: Record<string, Scene> = {
   'hall': {
@@ -24,19 +18,7 @@ const SCENES: Record<string, Scene> = {
 };
 
 const container = document.getElementById('viewer-container')!;
-const manager = new HotspotManager(container, (sceneId) => loadScene(sceneId));
-
-function loadScene(sceneId: string) {
-  const scene = SCENES[sceneId];
-  if (!scene) return;
-
-  console.log(`Cargando escena: ${scene.id}`);
-  // Aquí cambiarías el fondo de tu visor VR (Three.js, Panellum, etc.)
-  // document.body.style.backgroundImage = `url(${scene.imageUrl})`;
-
-  manager.clear();
-  scene.hotspots.forEach(h => manager.addHotspot(h.x, h.y, h.targetSceneId, h.label));
-}
+const controller = new SceneController(container, SCENES);
 
 // Carga inicial
-loadScene('hall');
+controller.init('hall');
