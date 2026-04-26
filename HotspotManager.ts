@@ -22,13 +22,26 @@ export class HotspotManager {
     div.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
     div.style.border = '2px solid white';
     div.style.cursor = 'pointer';
+    div.style.transition = 'transform 0.2s ease, background-color 0.2s ease';
     div.style.pointerEvents = 'auto'; // ¡ESTO ES LO MÁS IMPORTANTE!
     div.style.zIndex = '1000';
 
+    // Reacción visual al pasar el ratón (Hover)
+    div.addEventListener('mouseenter', () => {
+      div.style.transform = 'scale(1.2)';
+      div.style.backgroundColor = 'rgba(255, 255, 255, 1)';
+      div.style.boxShadow = '0 0 15px rgba(255, 255, 255, 0.8)';
+    });
+
+    div.addEventListener('mouseleave', () => {
+      div.style.transform = 'scale(1)';
+      div.style.backgroundColor = 'rgba(255, 255, 255, 0.7)';
+      div.style.boxShadow = 'none';
+    });
+
     // El evento de clic para navegación
     div.addEventListener('click', (e) => {
-      e.stopPropagation(); // Para que el clic no se pierda
-      console.log("¡Click detectado en hotspot!", sceneId);
+      e.stopPropagation(); // Evita que el clic se propague al visor 3D
       this.onNavigate(sceneId);
     });
 
