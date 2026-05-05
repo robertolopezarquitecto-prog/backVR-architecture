@@ -59,7 +59,7 @@ export default function VRViewer() {
     }, 500);
 
     // Scene Loading Logic
-    loadScene("salon");
+    loadScene("salon").catch((err) => console.error("Error loading initial scene:", err));
 
     // Animation loop for hotspots
     const animate = () => {
@@ -89,22 +89,28 @@ export default function VRViewer() {
     setIsLoading(true);
     setCurrentSceneId(sceneId);
 
-    // Update Telemetry
-    TelemetryService.getInstance().setScene(sceneId);
-    recordSceneChange(sceneId);
+    try {
+      // Update Telemetry
+      TelemetryService.getInstance().setScene(sceneId);
+      recordSceneChange(sceneId);
 
-    // Load 3D Scene
-    await viewerRef.current.loadScene(scene);
+      // Load 3D Scene
+      await viewerRef.current.loadScene(scene);
 
-    // Update Portals
-    hotspotRef.current.clear();
-    scene.portals.forEach((p) => {
-      hotspotRef.current?.addHotspot(p.id, p.position, p.label, (targetId) => {
-        loadScene(targetId);
+      // Update Portals
+      hotspotRef.current.clear();
+      scene.portals.forEach((p) => {
+         
+        hotspotRef.current?.addHotspot(p.id, p.position, p.label, (targetId) => {
+          // eslint-disable-next-line sonarjs/no-nested-functions
+          loadScene(targetId).catch((err) => console.error("Error navigating to scene:", err));
+        });
       });
-    });
-
-    setIsLoading(false);
+    } catch (err) {
+      console.error("Failed to load scene:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleGyroRequest = async () => {

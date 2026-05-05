@@ -58,9 +58,13 @@ export class Viewer {
     await this.loadTexture(config.urlLow);
 
     // Start loading High Res in background
-    this.loadTexture(config.urlHigh).then(() => {
-      console.log("High Res texture loaded");
-    });
+    this.loadTexture(config.urlHigh)
+      .then(() => {
+        console.log("High Res texture loaded");
+      })
+      .catch((err) => {
+        console.warn("Failed to load High Res texture:", err);
+      });
   }
 
   private async loadTexture(url: string): Promise<void> {
