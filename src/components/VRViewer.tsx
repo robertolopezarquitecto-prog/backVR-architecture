@@ -29,8 +29,10 @@ export default function VRViewer() {
   const viewerRef = useRef<Viewer | null>(null);
   const hotspotRef = useRef<HotspotManager | null>(null);
   const [currentSceneId, setCurrentSceneId] = useState("salon");
+  const [localSceneName, setLocalSceneName] = useState<string | null>(null);
   const [gyroAllowed, setGyroAllowed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { recordSessionStart, recordSceneChange } = useTelemetry();
 
   useEffect(() => {
@@ -100,7 +102,6 @@ export default function VRViewer() {
       // Update Portals
       hotspotRef.current.clear();
       scene.portals.forEach((p) => {
-         
         hotspotRef.current?.addHotspot(p.id, p.position, p.label, (targetId) => {
           // eslint-disable-next-line sonarjs/no-nested-functions
           loadScene(targetId).catch((err) => console.error("Error navigating to scene:", err));
@@ -113,6 +114,44 @@ export default function VRViewer() {
     }
   };
 
+  const loadLocalImage = async (file: File) => {
+    if (!viewerRef.current || !hotspotRef.current) return;
+    const objectUrl = URL.createObjectURL(file);
+    setIsLoading(true);
+    setCurrentSceneId("local");
+    setLocalSceneName(file.name);
+
+    TelemetryService.getInstance().setScene("local");
+
+    const tempScene: SceneConfig = {
+      id: "local",
+      name: file.name,
+      urlLow: objectUrl,
+      urlHigh: objectUrl,
+      portals: [],
+    };
+
+    try {
+      hotspotRef.current.clear();
+      await viewerRef.current.loadScene(tempScene);
+    } catch (err) {
+      console.error("Failed to load local scene:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      loadLocalImage(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
   const handleGyroRequest = async () => {
     if (viewerRef.current) {
       const granted = await viewerRef.current.requestGyroPermission();
@@ -121,13 +160,15 @@ export default function VRViewer() {
   };
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden">
+    <div className="relative w-full h-screen bg-black overflow-hidden" onDrop={handleDrop} onDragOver={handleDragOver}>
       <div id="viewer-container" ref={containerRef} className="w-full h-screen cursor-grab active:cursor-grabbing" />
 
       {/* UI Overlays */}
-      <div className="absolute top-6 left-6 z-20">
+      <div className="absolute top-6 left-6 z-20 pointer-events-none">
         <h1 className="text-white font-light tracking-widest text-xl uppercase opacity-80">backVR</h1>
-        <p className="text-blue-400 text-xs font-mono mt-1">{SCENES[currentSceneId]?.name}</p>
+        <p className="text-blue-400 text-xs font-mono mt-1">
+          {currentSceneId === "local" ? localSceneName : SCENES[currentSceneId]?.name}
+        </p>
       </div>
 
       <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex gap-4">
@@ -152,11 +193,37 @@ export default function VRViewer() {
         </div>
       )}
 
-      {/* Logger Status */}
-      <div className="absolute top-6 right-6 z-20 pointer-events-none">
-        <div className="bg-green-500/20 border border-green-500/50 text-green-400 px-3 py-1 rounded text-[10px] font-mono">
+      {/* Logger Status & Local Upload */}
+      <div className="absolute top-6 right-6 flex flex-col gap-3 items-end z-20">
+        <div className="bg-green-500/20 border border-green-500/50 text-green-400 px-3 py-1 rounded text-[10px] font-mono pointer-events-none">
           LOGGER MODE: ACTIVE
         </div>
+
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="bg-black/50 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded text-xs hover:bg-white/20 hover:border-white/50 transition-all cursor-pointer flex items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            />
+          </svg>
+          Subir Render Local
+        </button>
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files.length > 0) {
+              loadLocalImage(e.target.files[0]);
+            }
+          }}
+        />
       </div>
     </div>
   );
