@@ -35,7 +35,7 @@ export class Viewer {
 
     const geometry = new THREE.SphereGeometry(500, 60, 40);
     geometry.scale(-1, 1, 1);
-    this.material = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    this.material = new THREE.MeshBasicMaterial({ color: 0xffffff });
     this.sphere = new THREE.Mesh(geometry, this.material);
     this.scene.add(this.sphere);
 
