@@ -18,7 +18,8 @@ export class Viewer {
   private movementType: "gyro" | "touch" = "touch";
 
   private gyroActive: boolean = false;
-  private initialOrientation: { alpha: number; beta: number; gamma: number } | null = null;
+  private deviceOrientation: DeviceOrientationEvent | null = null;
+  private screenOrientation: number = 0;
 
   constructor(containerId: string) {
     this.container = document.getElementById(containerId) as HTMLElement;
@@ -92,6 +93,14 @@ export class Viewer {
   private initEventListeners() {
     window.addEventListener("resize", this.onWindowResize.bind(this));
 
+    const onScreenOrientationChangeEvent = () => {
+      // @ts-expect-error - window.orientation is deprecated but still required for iOS Safari
+      this.screenOrientation =
+        window.orientation !== undefined ? Number(window.orientation) : window.screen?.orientation?.angle || 0;
+    };
+    window.addEventListener("orientationchange", onScreenOrientationChangeEvent);
+    onScreenOrientationChangeEvent();
+
     // Touch starts movement type detection
     this.renderer.domElement.addEventListener(
       "touchstart",
@@ -124,14 +133,7 @@ export class Viewer {
   private onDeviceOrientation(event: DeviceOrientationEvent) {
     if (!this.gyroActive) return;
     this.movementType = "gyro";
-
-    // Simplified gyro implementation
-    // For a full production implementation, we'd use a Quaternion-based approach
-    if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
-      // Convert to radians and apply to camera rotation
-      // This is complex to do simultaneously with OrbitControls without conflicts
-      // We usually disable OrbitControls or use them as an offset
-    }
+    this.deviceOrientation = event;
   }
 
   public async requestGyroPermission(): Promise<boolean> {
@@ -162,12 +164,30 @@ export class Viewer {
   }
 
   private animate() {
-    this.renderer.setAnimationLoop(() => {
-      this.controls.update();
-      this.renderer.render(this.scene, this.camera);
+    const euler = new THREE.Euler();
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // - PI/2 around the x-axis
+    const zee = new THREE.Vector3(0, 0, 1);
 
-      // Periodic telemetry reporting from TelemetryService
-      // The actual reporting is handled by the service every 500ms
+    this.renderer.setAnimationLoop(() => {
+      if (this.gyroActive && this.deviceOrientation) {
+        this.controls.enabled = false;
+
+        const alpha = this.deviceOrientation.alpha ? THREE.MathUtils.degToRad(this.deviceOrientation.alpha) : 0;
+        const beta = this.deviceOrientation.beta ? THREE.MathUtils.degToRad(this.deviceOrientation.beta) : 0;
+        const gamma = this.deviceOrientation.gamma ? THREE.MathUtils.degToRad(this.deviceOrientation.gamma) : 0;
+        const orient = this.screenOrientation ? THREE.MathUtils.degToRad(this.screenOrientation) : 0;
+
+        euler.set(beta, alpha, -gamma, "YXZ"); // 'ZXY' for the device, but 'YXZ' for us
+        this.camera.quaternion.setFromEuler(euler);
+        this.camera.quaternion.multiply(q1);
+        this.camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+      } else {
+        this.controls.enabled = true;
+        this.controls.update();
+      }
+
+      this.renderer.render(this.scene, this.camera);
     });
   }
 
@@ -191,5 +211,6 @@ export class Viewer {
     this.controls.dispose();
     window.removeEventListener("resize", this.onWindowResize);
     window.removeEventListener("deviceorientation", this.onDeviceOrientation);
+    window.removeEventListener("orientationchange", () => {});
   }
 }
