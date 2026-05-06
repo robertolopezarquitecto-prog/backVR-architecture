@@ -1,3 +1,4 @@
+import { Analytics, getAnalytics } from "firebase/analytics";
 import { getApps, initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
@@ -13,3 +14,10 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getFirestore(app);
+
+let analytics: Analytics | undefined;
+if (typeof window !== "undefined") {
+  analytics = getAnalytics(app);
+}
+
+export { analytics };

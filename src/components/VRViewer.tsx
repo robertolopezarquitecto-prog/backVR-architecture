@@ -134,6 +134,13 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
       hotspotRef.current.clear();
       scene.portals.forEach((p) => {
         hotspotRef.current?.addHotspot(p.id, p.position, p.label, (targetId) => {
+          // Tracking GA4
+          TelemetryService.getInstance().trackVRInteraction("hotspot_click", {
+            from_scene: sceneId,
+            to_scene: targetId,
+            label: p.label,
+          });
+
           // eslint-disable-next-line sonarjs/no-nested-functions
           loadScene(targetId).catch((err) => console.error("Error navigating to scene:", err));
         });
@@ -199,6 +206,11 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
     if (viewerRef.current) {
       const granted = await viewerRef.current.requestGyroPermission();
       setGyroAllowed(granted);
+
+      // Tracking GA4
+      TelemetryService.getInstance().trackVRInteraction("gyroscope_toggle", {
+        status: granted ? "granted" : "denied",
+      });
     }
   };
 

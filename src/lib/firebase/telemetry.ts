@@ -1,5 +1,7 @@
+import { logEvent, setUserId } from "firebase/analytics";
 import { serverTimestamp } from "firebase/firestore";
 import type { TelemetryData } from "@/types/telemetry";
+import { analytics } from "./config";
 import { appendTelemetryDoc } from "./telemetry-api";
 
 export type { TelemetryData } from "@/types/telemetry";
@@ -13,7 +15,13 @@ export class TelemetryService {
   private timerId: NodeJS.Timeout | null = null;
 
   private constructor() {
-    this.sessionId = globalThis.crypto.randomUUID();
+    // Generamos un ID de sesión único
+    this.sessionId = typeof window !== "undefined" ? window.crypto.randomUUID() : "server-side";
+
+    // Configuramos el User ID en GA4 para seguimiento cruzado
+    if (analytics) {
+      setUserId(analytics, this.sessionId);
+    }
   }
 
   public static getInstance(): TelemetryService {
@@ -23,21 +31,44 @@ export class TelemetryService {
     return TelemetryService.instance;
   }
 
+  /**
+   * GA4 Tracking function requested by user
+   */
+  public trackVRInteraction(eventType: string, details: Record<string, unknown>) {
+    if (!analytics) return;
+
+    const eventParams = {
+      session_id: this.sessionId,
+      scene_id: this.currentSceneId,
+      ...details,
+    };
+
+    logEvent(analytics, eventType, eventParams);
+    console.log(`[GA4 EVENT] ${eventType}:`, eventParams);
+  }
+
   public start(sceneId: string) {
     this.currentSceneId = sceneId;
     if (this.isRunning) return;
     this.isRunning = true;
     this.loop();
+
+    // Track initial scene view
+    this.trackVRInteraction("scene_view", { scene_name: sceneId });
     console.log("Telemetry started:", this.sessionId);
   }
 
   public stop() {
     this.isRunning = false;
     if (this.timerId) clearTimeout(this.timerId);
+    this.trackVRInteraction("session_end", {});
   }
 
   public setScene(sceneId: string) {
-    this.currentSceneId = sceneId;
+    if (this.currentSceneId !== sceneId) {
+      this.currentSceneId = sceneId;
+      this.trackVRInteraction("scene_view", { scene_name: sceneId });
+    }
   }
 
   public getSessionId(): string {
@@ -50,10 +81,6 @@ export class TelemetryService {
 
   private async loop() {
     if (!this.isRunning) return;
-
-    // Note: The actual camera direction will be passed from the Viewer
-    // This is a placeholder for the logic. In implementation, we trigger this from the viewer's update loop or an event.
-
     this.timerId = setTimeout(() => this.loop(), this.interval);
   }
 
@@ -76,9 +103,6 @@ export class TelemetryService {
     }
   }
 
-  // sendBeacon for closing tab (simplified for Firestore)
-  // Firestore SDK doesn't support sendBeacon directly, so we use a fallback if needed
-  // or just ensure we flush data.
   public async logSessionEnd() {
     const data: TelemetryData = {
       session_id: this.sessionId,
