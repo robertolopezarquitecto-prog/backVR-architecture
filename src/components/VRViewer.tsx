@@ -39,8 +39,16 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
   const [gyroAllowed, setGyroAllowed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [shareLink, setShareLink] = useState<string | null>(null);
+  const [tunnelUrl, setTunnelUrl] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { recordSessionStart, recordSceneChange } = useTelemetry();
+
+  useEffect(() => {
+    // Intentar autodetectar el túnel si no es localhost
+    if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
+      setTunnelUrl(window.location.origin);
+    }
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -164,8 +172,10 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
       formData.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
+
       if (data.success && typeof window !== "undefined") {
-        setShareLink(`${window.location.origin}/tour?id=${data.id}&name=${encodeURIComponent(file.name)}`);
+        const base = tunnelUrl || window.location.origin;
+        setShareLink(`${base}/tour?id=test&name=${encodeURIComponent(file.name)}`);
       }
     } catch (err) {
       console.error("Failed to load local scene:", err);
@@ -235,6 +245,17 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
         <div className="absolute top-6 right-6 flex flex-col gap-3 items-end z-20">
           <div className="bg-green-500/20 border border-green-500/50 text-green-400 px-3 py-1 rounded text-[10px] font-mono pointer-events-none">
             LOGGER MODE: ACTIVE
+          </div>
+
+          <div className="flex flex-col gap-1 w-full max-w-[200px]">
+            <label className="text-white/50 text-[9px] uppercase tracking-wider font-bold">URL del Túnel</label>
+            <input
+              type="text"
+              placeholder="https://...loca.lt"
+              value={tunnelUrl}
+              onChange={(e) => setTunnelUrl(e.target.value)}
+              className="bg-black/50 border border-white/20 rounded px-2 py-1 text-[10px] text-white focus:border-blue-500 outline-none w-full"
+            />
           </div>
 
           <button
