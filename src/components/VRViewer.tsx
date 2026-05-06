@@ -1,373 +1,198 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { useTelemetry } from "@/hooks/use-telemetry";
+import { addDoc, collection, onSnapshot, query, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { TelemetryService } from "@/lib/firebase/telemetry";
 import { HotspotManager } from "@/lib/three/HotspotManager";
 import { Viewer } from "@/lib/three/Viewer";
 import type { SceneConfig } from "@/types/scene";
 
-const SCENES: Record<string, SceneConfig> = {
-  salon: {
-    id: "salon",
-    name: "Salón Principal",
-    urlLow: "https://storage.googleapis.com/backvr-architecture-storage/renders/mi_primer_render_low.png",
-    urlHigh: "https://storage.googleapis.com/backvr-architecture-storage/renders/mi_primer_render.png",
-    portals: [{ id: "cocina", position: { x: 0.707, y: -0.1, z: -0.707 }, label: "Ir a Cocina" }],
-  },
-  cocina: {
-    id: "cocina",
-    name: "Cocina Americana",
-    urlLow: "https://storage.googleapis.com/backvr-architecture-storage/renders/mi_primer_render-cocina_low.png",
-    urlHigh: "https://storage.googleapis.com/backvr-architecture-storage/renders/mi_primer_render-cocina.png",
-    portals: [{ id: "salon", position: { x: -0.707, y: -0.1, z: 0.707 }, label: "Volver al Salón" }],
-  },
-};
-
-type VRViewerProps = {
-  mode?: "backoffice" | "player";
-  initialSceneUrl?: string;
-  sceneName?: string;
-};
-
-export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneName }: VRViewerProps) {
+export default function VRViewer({ mode = "backoffice" }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const hotspotRef = useRef<HotspotManager | null>(null);
-  const [currentSceneId, setCurrentSceneId] = useState("salon");
-  const [localSceneName, setLocalSceneName] = useState<string | null>(null);
-  const [gyroAllowed, setGyroAllowed] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [shareLink, setShareLink] = useState<string | null>(null);
+
+  const [currentSceneId, setCurrentSceneId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [scenes, setScenes] = useState<SceneConfig[]>([]);
+  const [dbStatus, setDbStatus] = useState<"connecting" | "connected" | "error">("connecting");
   const [tunnelUrl, setTunnelUrl] = useState("");
-  const [scenes, setScenes] = useState<SceneConfig[]>([]); // ESTADO QUE FALTABA
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [isEngineReady, setIsEngineReady] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { recordSessionStart, recordSceneChange } = useTelemetry();
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
-      setTunnelUrl(window.location.origin);
-    }
-  }, []);
-
-  // Cargar escenas de Firestore en tiempo real
-  useEffect(() => {
-    if (mode === "backoffice") {
-      const q = query(collection(db, "scenes"), orderBy("createdAt", "desc"));
-      return onSnapshot(q, (snapshot) => {
-        const loadedScenes = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name,
-            urlLow: data.urlLow,
-            urlHigh: data.urlHigh,
-            portals: data.portals || [],
-          };
-        }) as SceneConfig[];
-        setScenes(loadedScenes);
-      });
-    }
-  }, [mode]);
 
   useEffect(() => {
     if (!containerRef.current) return;
-
-    const viewer = new Viewer(containerRef.current.id);
-    viewerRef.current = viewer;
-
-    const hotspots = new HotspotManager(viewer.camera, containerRef.current);
-    hotspotRef.current = hotspots;
-
-    const telemetry = TelemetryService.getInstance();
-    telemetry.start(currentSceneId);
-    recordSessionStart("salon");
-
-    const telemetryInterval = setInterval(() => {
-      if (viewerRef.current) {
-        const gaze = viewerRef.current.getGazeDirection();
-        const movementType = viewerRef.current.getMovementType();
-        telemetry.logGaze({ x: gaze.x, y: gaze.y, z: gaze.z }, movementType);
-      }
-    }, 500);
-
-    if (mode === "player" && initialSceneUrl) {
-      setCurrentSceneId("player");
-      setLocalSceneName(sceneName || "Recorrido");
-      const tempScene: SceneConfig = {
-        id: "player",
-        name: sceneName || "Recorrido",
-        urlLow: initialSceneUrl,
-        urlHigh: initialSceneUrl,
-        portals: [],
-      };
-      viewerRef.current
-        .loadScene(tempScene)
-        .then(() => setIsLoading(false))
-        .catch(console.error);
-    } else {
-      loadScene("salon").catch((err) => console.error("Error loading initial scene:", err));
-    }
-
+    const v = new Viewer(containerRef.current.id);
+    viewerRef.current = v;
+    hotspotRef.current = new HotspotManager(v.camera, containerRef.current);
     const animate = () => {
-      hotspots.updatePositions();
+      hotspotRef.current?.updatePositions();
       requestAnimationFrame(animate);
     };
-    const animId = requestAnimationFrame(animate);
+    requestAnimationFrame(animate);
+    setIsEngineReady(true);
+    return () => v.dispose();
+  }, []);
 
-    window.onbeforeunload = () => {
-      telemetry.logSessionEnd();
-    };
+  useEffect(() => {
+    if (!isEngineReady) return;
+    const q = query(collection(db, "scenes"));
+    const unsubscribe = onSnapshot(
+      q,
+      (snap) => {
+        setDbStatus("connected");
+        const data = snap.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt || { seconds: Date.now() / 1000 },
+        })) as SceneConfig[];
 
-    return () => {
-      clearInterval(telemetryInterval);
-      cancelAnimationFrame(animId);
-      viewer.dispose();
-      hotspots.dispose();
-      telemetry.stop();
-    };
-  }, [recordSessionStart]);
+        data.sort((a, b) => {
+          const timeA = (a.createdAt as { seconds?: number })?.seconds || 0;
+          const timeB = (b.createdAt as { seconds?: number })?.seconds || 0;
+          return timeB - timeA;
+        });
 
-  const loadScene = async (sceneId: string) => {
-    let scene = SCENES[sceneId];
+        setScenes(data);
+      },
+      (err) => {
+        console.error("Firestore Error:", err);
+        setDbStatus("error");
+      },
+    );
+    return () => unsubscribe();
+  }, [isEngineReady]);
 
-    if (!scene) {
-      scene = scenes.find((s) => s.id === sceneId) as SceneConfig;
-    }
-
-    if (!scene || !viewerRef.current || !hotspotRef.current) return;
-
+  const loadScene = async (scene: SceneConfig) => {
+    if (!viewerRef.current) return;
     setIsLoading(true);
-    setCurrentSceneId(sceneId);
-
     try {
-      TelemetryService.getInstance().setScene(sceneId);
-      recordSceneChange(sceneId);
       await viewerRef.current.loadScene(scene);
-
-      hotspotRef.current.clear();
-      for (const p of scene.portals || []) {
-        const onHotspotClick = (targetId: string) => {
-          TelemetryService.getInstance().trackVRInteraction("hotspot_click", {
-            from_scene: sceneId,
-            to_scene: targetId,
-            label: p.label,
-          });
-          loadScene(targetId).catch((err) => console.error("Error navigating to scene:", err));
-        };
-        hotspotRef.current?.addHotspot(p.id, p.position, p.label, onHotspotClick);
-      }
-    } catch (err) {
-      console.error("Failed to load scene:", err);
+      setCurrentSceneId(scene.id);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadLocalImage = async (file: File) => {
-    if (!viewerRef.current || !hotspotRef.current) return;
-    const objectUrl = URL.createObjectURL(file);
-    setIsLoading(true);
-    setCurrentSceneId("local");
-    setLocalSceneName(file.name);
-    setShareLink(null);
-
-    TelemetryService.getInstance().setScene("local");
-
-    const tempScene: SceneConfig = {
-      id: "local",
-      name: file.name,
-      urlLow: objectUrl,
-      urlHigh: objectUrl,
-      portals: [],
-    };
-
+  const onUpload = async (file: File) => {
+    if (!viewerRef.current) return;
+    setIsUploading(true);
+    const localUrl = URL.createObjectURL(file);
     try {
-      hotspotRef.current.clear();
-      // CARGA INMEDIATA: Usamos la URL local del navegador para que no haya espera
-      await viewerRef.current.loadScene(tempScene);
-      setIsLoading(false);
+      viewerRef.current.loadScene({ id: "temp", name: file.name, urlLow: localUrl, urlHigh: localUrl, portals: [] });
 
-      // SUBIDA A SEGUNDO PLANO: Mientras el usuario ya ve la imagen, la subimos
-      const formData = new FormData();
-      formData.append("file", file);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await res.json();
 
-      if (data.success && typeof window !== "undefined") {
+      if (data.success) {
+        const docRef = await addDoc(collection(db, "scenes"), {
+          name: data.name,
+          urlHigh: data.urls.high,
+          urlMedium: data.urls.medium,
+          urlLow: data.urls.low,
+          portals: [],
+          createdAt: serverTimestamp(),
+        });
+
         const base = tunnelUrl || window.location.origin;
-        setShareLink(`${base}/tour?id=${data.scene.id}&name=${encodeURIComponent(file.name)}`);
-
-        // Actualizamos el ID actual para que coincida con la DB
-        setCurrentSceneId(data.scene.id);
+        setShareLink(`${base}/tour?id=${docRef.id}&name=${encodeURIComponent(file.name)}`);
+        setCurrentSceneId(docRef.id);
       }
-    } catch (err) {
-      console.error("Failed to load local scene:", err);
-      setIsLoading(false);
+    } catch (e) {
+      console.error(e);
+      alert("Error al guardar: " + (e as Error).message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      loadLocalImage(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleGyroRequest = async () => {
-    if (viewerRef.current) {
-      const granted = await viewerRef.current.requestGyroPermission();
-      setGyroAllowed(granted);
-      TelemetryService.getInstance().trackVRInteraction("gyroscope_toggle", {
-        status: granted ? "granted" : "denied",
-      });
-    }
-  };
+  let statusText = "Sincronizando...";
+  if (isUploading) {
+    statusText = "Subiendo...";
+  } else if (dbStatus === "connected") {
+    statusText = `En línea (${scenes.length})`;
+  }
 
   return (
-    <div
-      className="relative w-full h-screen bg-black overflow-hidden"
-      onDrop={mode === "backoffice" ? handleDrop : undefined}
-      onDragOver={mode === "backoffice" ? handleDragOver : undefined}
-    >
-      <div id="viewer-container" ref={containerRef} className="w-full h-screen cursor-grab active:cursor-grabbing" />
+    <div className="relative w-full h-screen bg-black overflow-hidden font-sans text-white">
+      <div id="viewer-container" ref={containerRef} className="w-full h-screen" />
 
-      {/* Sidebar de Escenas (Backoffice) */}
       {mode === "backoffice" && (
-        <div className="absolute top-0 left-0 w-64 h-full bg-black/80 backdrop-blur-xl border-r border-white/10 z-30 p-6 flex flex-col gap-6 animate-in slide-in-from-left duration-500">
-          <div className="flex flex-col gap-1">
-            <h2 className="text-white font-bold text-lg tracking-tight">Escenas del Tour</h2>
-            <p className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Gestión de Recorrido</p>
+        <div className="absolute top-0 left-0 w-72 h-full bg-black/90 backdrop-blur-3xl border-r border-white/5 z-30 p-8 flex flex-col gap-8">
+          <div>
+            <h1 className="text-white font-black text-2xl italic tracking-tighter leading-none">
+              back<span className="text-blue-500">VR</span>
+            </h1>
+            <p className="text-white/30 text-[9px] uppercase font-bold mt-1 tracking-widest">by backESTUDIO</p>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-1.5 h-1.5 rounded-full ${dbStatus === "connected" ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-yellow-500 animate-pulse"} ${isUploading ? "animate-ping" : ""}`}
+                />
+                <p className="text-white/40 text-[8px] font-bold uppercase tracking-widest">{statusText}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2 overflow-y-auto pr-2 custom-scrollbar">
-            {Object.values(SCENES).map((scene) => (
+          <div className="flex flex-col gap-2 overflow-y-auto custom-scrollbar">
+            <p className="text-white/20 text-[9px] uppercase font-bold tracking-widest px-2 mb-2">Escenas</p>
+            {scenes.map((s) => (
               <button
-                key={scene.id}
-                onClick={() => loadScene(scene.id)}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-all text-left border ${
-                  currentSceneId === scene.id
-                    ? "bg-blue-600/20 border-blue-500 text-white"
-                    : "bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:border-white/20"
-                }`}
+                key={s.id}
+                onClick={() => loadScene(s)}
+                className={`flex items-center gap-4 p-4 rounded-xl transition-all border ${currentSceneId === s.id ? "bg-blue-600 border-blue-500 text-white shadow-lg" : "bg-white/5 border-transparent text-white/40 hover:bg-white/10"}`}
               >
-                <div
-                  className={`w-2 h-2 rounded-full ${currentSceneId === scene.id ? "bg-blue-400 animate-pulse" : "bg-white/20"}`}
-                />
-                <span className="text-xs font-medium truncate">{scene.name}</span>
-              </button>
-            ))}
-
-            <div className="h-px bg-white/10 my-2" />
-            <p className="text-white/30 text-[9px] uppercase tracking-widest font-bold mb-1">Subidas Recientemente</p>
-
-            {scenes.map((scene) => (
-              <button
-                key={scene.id}
-                onClick={() => loadScene(scene.id)}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-all text-left border ${
-                  currentSceneId === scene.id
-                    ? "bg-blue-600/20 border-blue-500 text-white"
-                    : "bg-white/5 border-transparent text-white/60 hover:bg-white/10 hover:border-white/20"
-                }`}
-              >
-                <div
-                  className={`w-2 h-2 rounded-full ${currentSceneId === scene.id ? "bg-blue-400 animate-pulse" : "bg-white/20"}`}
-                />
-                <span className="text-xs font-medium truncate">{scene.name}</span>
+                <div className={`w-1 h-1 rounded-full ${currentSceneId === s.id ? "bg-white" : "bg-white/20"}`} />
+                <span className="text-[11px] font-semibold truncate">{s.name}</span>
               </button>
             ))}
           </div>
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="mt-auto bg-white text-black font-bold py-3 rounded-xl text-xs hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center gap-2"
+            className="mt-auto bg-white text-black font-bold py-4 rounded-2xl text-[11px] hover:bg-blue-500 hover:text-white transition-all uppercase tracking-tighter"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Añadir Escena
+            Subir Render 8K
           </button>
         </div>
       )}
 
-      {/* Info Badge (Player) */}
-      {mode === "player" && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-          <div className="bg-black/60 backdrop-blur-md px-6 py-3 rounded-full border border-white/10 text-white text-sm font-medium tracking-wide">
-            {localSceneName || "Cargando recorrido..."}
-          </div>
-        </div>
-      )}
-
-      {/* UI Overlays */}
       {isLoading && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black transition-opacity duration-500 text-center px-4">
-          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-white mt-4 font-light tracking-widest uppercase text-xs">Cargando Espacio</span>
-        </div>
-      )}
-
-      {!gyroAllowed && mode === "player" && (
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-4">
-          <button
-            onClick={handleGyroRequest}
-            className="bg-white/10 backdrop-blur-md border border-white/20 text-white px-8 py-3 rounded-full text-sm font-semibold hover:bg-white/20 transition-all flex items-center gap-2 group"
-          >
-            <svg
-              className="w-5 h-5 group-hover:rotate-12 transition-transform"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
-              />
-            </svg>
-            Activar Giroscopio (Móvil)
-          </button>
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 bg-black/80 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-full flex items-center gap-3">
+          <div className="w-3 h-3 border border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-white/50 text-[9px] uppercase font-bold tracking-widest">Cargando</span>
         </div>
       )}
 
       {mode === "backoffice" && (
-        <div className="absolute top-6 right-6 flex flex-col gap-3 items-end z-20">
-          <div className="bg-green-500/20 border border-green-500/50 text-green-400 px-3 py-1 rounded text-[10px] font-mono pointer-events-none">
-            LOGGER MODE: ACTIVE
-          </div>
-
-          <div className="flex flex-col gap-1 w-full max-w-[200px]">
-            <label className="text-white/50 text-[9px] uppercase tracking-wider font-bold">URL del Túnel</label>
+        <div className="absolute top-8 right-8 flex flex-col gap-4 items-end z-20">
+          <div className="bg-black/50 border border-white/10 rounded-2xl p-4 w-60 backdrop-blur-md">
+            <label className="text-white/20 text-[8px] uppercase font-bold block mb-2 px-1">Enlace Cliente</label>
             <input
               type="text"
-              placeholder="https://...loca.lt"
+              placeholder="URL Túnel..."
               value={tunnelUrl}
               onChange={(e) => setTunnelUrl(e.target.value)}
-              className="bg-black/50 border border-white/20 rounded px-2 py-1 text-[10px] text-white focus:border-blue-500 outline-none w-full"
+              className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[10px] text-white outline-none w-full"
             />
           </div>
-
           {shareLink && (
-            <div className="bg-blue-600 p-4 rounded-xl shadow-2xl flex flex-col gap-2 max-w-[240px] animate-in fade-in zoom-in">
-              <p className="text-[10px] text-white/80 font-medium">¡Escena lista!</p>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(shareLink);
-                  alert("Link copiado al portapapeles");
-                }}
-                className="bg-white text-blue-600 text-[10px] font-bold py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
-              >
-                Copiar Enlace Público
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(shareLink);
+                alert("¡Link copiado!");
+              }}
+              className="bg-blue-600 text-white text-[10px] font-black py-4 px-8 rounded-2xl shadow-2xl hover:bg-blue-500 transition-all uppercase tracking-widest"
+            >
+              Copiar Enlace
+            </button>
           )}
         </div>
       )}
@@ -377,8 +202,19 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
         ref={fileInputRef}
         className="hidden"
         accept="image/*"
-        onChange={(e) => e.target.files?.[0] && loadLocalImage(e.target.files[0])}
+        onChange={(e) => e.target.files?.[0] && onUpload(e.target.files[0])}
       />
+
+      <style jsx>{`
+        @keyframes loading {
+          0% {
+            transform: translateX(-100%);
+          }
+          100% {
+            transform: translateX(250%);
+          }
+        }
+      `}</style>
     </div>
   );
 }

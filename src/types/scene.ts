@@ -8,6 +8,7 @@ export interface SceneConfig {
   id: string;
   name: string;
   urlLow: string;
+  urlMedium?: string;
   urlHigh: string;
   portals: ScenePortal[];
 }
