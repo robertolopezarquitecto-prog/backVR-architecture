@@ -1,6 +1,8 @@
+import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { mkdir, writeFile } from "fs/promises";
 import { NextResponse } from "next/server";
 import { join } from "path";
+import { db } from "@/lib/firebase/config";
 
 export async function POST(request: Request) {
   try {
@@ -14,18 +16,37 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Guardar siempre como test.png para simplificar el MVP
-    const filename = "test.png";
-    const tempDir = join(process.cwd(), "public", "temp");
+    // Generamos un nombre único pero mantenemos la extensión original
+    const timestamp = Date.now();
+    const cleanFileName = file.name.replace(/[^a-z0-9.]/gi, "_").toLowerCase();
+    const filename = `${timestamp}-${cleanFileName}`;
 
-    // Crear directorio si falta
+    const tempDir = join(process.cwd(), "public", "temp");
     await mkdir(tempDir, { recursive: true });
 
     const path = join(tempDir, filename);
     await writeFile(path, buffer);
 
-    // Retornamos la ruta relativa que Next.js sirve desde public
-    return NextResponse.json({ success: true, url: `/temp/${filename}` });
+    const relativeUrl = `/temp/${filename}`;
+
+    // PERSISTENCIA EN FIRESTORE: Guardamos la escena en la colección "scenes"
+    const sceneData = {
+      name: file.name,
+      urlHigh: relativeUrl,
+      urlLow: relativeUrl, // Para el MVP usamos la misma
+      createdAt: serverTimestamp(),
+      type: "uploaded",
+    };
+
+    const docRef = await addDoc(collection(db, "scenes"), sceneData);
+
+    return NextResponse.json({
+      success: true,
+      scene: {
+        id: docRef.id,
+        ...sceneData,
+      },
+    });
   } catch (error) {
     console.error("Upload Error:", error);
     return NextResponse.json({ success: false, error: "Upload failed" }, { status: 500 });
