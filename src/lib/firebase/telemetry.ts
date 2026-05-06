@@ -15,8 +15,17 @@ export class TelemetryService {
   private timerId: NodeJS.Timeout | null = null;
 
   private constructor() {
-    // Generamos un ID de sesión único
-    this.sessionId = typeof window !== "undefined" ? window.crypto.randomUUID() : "server-side";
+    // Intentamos recuperar la sesión del almacenamiento del navegador
+    const savedSessionId = typeof window !== "undefined" ? sessionStorage.getItem("vr_session_id") : null;
+
+    if (savedSessionId) {
+      this.sessionId = savedSessionId;
+    } else {
+      this.sessionId = typeof window !== "undefined" ? window.crypto.randomUUID() : "server-side";
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("vr_session_id", this.sessionId);
+      }
+    }
 
     // Configuramos el User ID en GA4 para seguimiento cruzado
     if (analytics) {
