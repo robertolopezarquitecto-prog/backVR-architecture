@@ -32,6 +32,10 @@ export class Viewer {
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.xr.enabled = true;
+
+    this.textureLoader = new THREE.TextureLoader();
+    this.textureLoader.setCrossOrigin("anonymous");
+
     this.container.appendChild(this.renderer.domElement);
 
     const geometry = new THREE.SphereGeometry(500, 60, 40);
@@ -45,41 +49,16 @@ export class Viewer {
     this.controls.enablePan = false;
     this.controls.rotateSpeed = -0.4;
 
-    this.textureLoader = new THREE.TextureLoader();
-    this.textureLoader.setCrossOrigin("anonymous");
-
     this.initEventListeners();
     this.animate();
   }
 
-  public async loadScene(config: SceneConfig) {
-    console.log(`Loading scene: ${config.name}`);
-
-    // Progressive Loading: 1K then 8K
-    await this.loadTexture(config.urlLow);
-
-    // Start loading High Res in background
-    this.loadTexture(config.urlHigh)
-      .then(() => {
-        console.log("High Res texture loaded");
-      })
-      .catch((err) => {
-        console.warn("Failed to load High Res texture:", err);
-      });
-  }
-
-  private async loadTexture(url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+  public async loadScene(scene: SceneConfig) {
+    return new Promise<void>((resolve, reject) => {
       this.textureLoader.load(
-        url,
+        scene.urlHigh,
         (texture) => {
           texture.colorSpace = THREE.SRGBColorSpace;
-
-          // Memory Management: Dispose old texture
-          if (this.material.map) {
-            this.material.map.dispose();
-          }
-
           this.material.map = texture;
           this.material.needsUpdate = true;
           resolve();
@@ -202,12 +181,9 @@ export class Viewer {
   }
 
   public dispose() {
-    // Strict Memory Management
-    this.scene.remove(this.sphere);
-    this.sphere.geometry.dispose();
-    if (this.material.map) this.material.map.dispose();
-    this.material.dispose();
     this.renderer.dispose();
+    this.material.dispose();
+    this.sphere.geometry.dispose();
     this.controls.dispose();
     window.removeEventListener("resize", this.onWindowResize);
     window.removeEventListener("deviceorientation", this.onDeviceOrientation);

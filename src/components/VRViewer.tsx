@@ -289,6 +289,9 @@ export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneNa
               >
                 Copiar Enlace
               </button>
+              <p className="text-[9px] text-white/40 italic mt-1 leading-tight">
+                * Recuerda pulsar "Click to Continue" en el móvil si aparece el aviso de localtunnel.
+              </p>
             </div>
           )}
 
