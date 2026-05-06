@@ -24,7 +24,13 @@ const SCENES: Record<string, SceneConfig> = {
   },
 };
 
-export default function VRViewer() {
+type VRViewerProps = {
+  mode?: "backoffice" | "player";
+  initialSceneUrl?: string;
+  sceneName?: string;
+};
+
+export default function VRViewer({ mode = "backoffice", initialSceneUrl, sceneName }: VRViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const hotspotRef = useRef<HotspotManager | null>(null);
@@ -32,6 +38,7 @@ export default function VRViewer() {
   const [localSceneName, setLocalSceneName] = useState<string | null>(null);
   const [gyroAllowed, setGyroAllowed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [shareLink, setShareLink] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { recordSessionStart, recordSceneChange } = useTelemetry();
 
@@ -60,8 +67,24 @@ export default function VRViewer() {
       }
     }, 500);
 
-    // Scene Loading Logic
-    loadScene("salon").catch((err) => console.error("Error loading initial scene:", err));
+    // Initial Scene Load
+    if (mode === "player" && initialSceneUrl) {
+      setCurrentSceneId("player");
+      setLocalSceneName(sceneName || "Recorrido");
+      const tempScene: SceneConfig = {
+        id: "player",
+        name: sceneName || "Recorrido",
+        urlLow: initialSceneUrl,
+        urlHigh: initialSceneUrl,
+        portals: [],
+      };
+      viewerRef.current
+        .loadScene(tempScene)
+        .then(() => setIsLoading(false))
+        .catch(console.error);
+    } else {
+      loadScene("salon").catch((err) => console.error("Error loading initial scene:", err));
+    }
 
     // Animation loop for hotspots
     const animate = () => {
@@ -120,6 +143,7 @@ export default function VRViewer() {
     setIsLoading(true);
     setCurrentSceneId("local");
     setLocalSceneName(file.name);
+    setShareLink(null);
 
     TelemetryService.getInstance().setScene("local");
 
@@ -134,6 +158,15 @@ export default function VRViewer() {
     try {
       hotspotRef.current.clear();
       await viewerRef.current.loadScene(tempScene);
+
+      // Upload to server to generate shareable link
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.success && typeof window !== "undefined") {
+        setShareLink(`${window.location.origin}/tour?id=${data.id}&name=${encodeURIComponent(file.name)}`);
+      }
     } catch (err) {
       console.error("Failed to load local scene:", err);
     } finally {
@@ -160,7 +193,11 @@ export default function VRViewer() {
   };
 
   return (
-    <div className="relative w-full h-screen bg-black overflow-hidden" onDrop={handleDrop} onDragOver={handleDragOver}>
+    <div
+      className="relative w-full h-screen bg-black overflow-hidden"
+      onDrop={mode === "backoffice" ? handleDrop : undefined}
+      onDragOver={mode === "backoffice" ? handleDragOver : undefined}
+    >
       <div id="viewer-container" ref={containerRef} className="w-full h-screen cursor-grab active:cursor-grabbing" />
 
       {/* UI Overlays */}
@@ -194,37 +231,59 @@ export default function VRViewer() {
       )}
 
       {/* Logger Status & Local Upload */}
-      <div className="absolute top-6 right-6 flex flex-col gap-3 items-end z-20">
-        <div className="bg-green-500/20 border border-green-500/50 text-green-400 px-3 py-1 rounded text-[10px] font-mono pointer-events-none">
-          LOGGER MODE: ACTIVE
-        </div>
+      {mode === "backoffice" && (
+        <div className="absolute top-6 right-6 flex flex-col gap-3 items-end z-20">
+          <div className="bg-green-500/20 border border-green-500/50 text-green-400 px-3 py-1 rounded text-[10px] font-mono pointer-events-none">
+            LOGGER MODE: ACTIVE
+          </div>
 
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="bg-black/50 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded text-xs hover:bg-white/20 hover:border-white/50 transition-all cursor-pointer flex items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-            />
-          </svg>
-          Subir Render Local
-        </button>
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files && e.target.files.length > 0) {
-              loadLocalImage(e.target.files[0]);
-            }
-          }}
-        />
-      </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-black/50 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded text-xs hover:bg-white/20 hover:border-white/50 transition-all cursor-pointer flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+              />
+            </svg>
+            Subir Render Local
+          </button>
+
+          {shareLink && (
+            <div className="bg-black/80 backdrop-blur-md border border-blue-500/50 p-4 rounded-lg mt-2 flex flex-col gap-2 max-w-xs animate-in fade-in slide-in-from-right-4 duration-300">
+              <span className="text-blue-400 text-xs font-semibold">Enlace Público (Player)</span>
+              <input
+                type="text"
+                readOnly
+                value={shareLink}
+                className="bg-black text-[10px] text-white p-2 rounded border border-white/20 w-full font-mono focus:outline-none"
+                onClick={(e) => e.currentTarget.select()}
+              />
+              <button
+                onClick={() => navigator.clipboard.writeText(shareLink)}
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs py-1.5 rounded transition-colors"
+              >
+                Copiar Enlace
+              </button>
+            </div>
+          )}
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                loadLocalImage(e.target.files[0]);
+              }
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
