@@ -5,5 +5,10 @@ import { db } from "./config";
 const TELEMETRY_COLLECTION = "telemetry";
 
 export async function appendTelemetryDoc(data: TelemetryData): Promise<void> {
-  await addDoc(collection(db, TELEMETRY_COLLECTION), data);
+  try {
+    await addDoc(collection(db, TELEMETRY_COLLECTION), data);
+  } catch (error) {
+    console.error("[FIRESTORE ERROR] Falló el envío de telemetría:", error);
+    throw error;
+  }
 }
